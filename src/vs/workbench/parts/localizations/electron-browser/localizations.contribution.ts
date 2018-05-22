@@ -28,6 +28,7 @@ import { TPromise } from 'vs/base/common/winjs.base';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { VIEWLET_ID as EXTENSIONS_VIEWLET_ID, IExtensionsViewlet } from 'vs/workbench/parts/extensions/common/extensions';
 import product from 'vs/platform/node/product';
+import minimalTransations from 'vs/platform/node/minimalTranslations';
 
 // Register action to configure locale and related settings
 const registry = Registry.as<IWorkbenchActionRegistry>(Extensions.WorkbenchActions);
@@ -115,20 +116,20 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 			return;
 		}
 
-		const bundledTranslations = (product['bundledTranslations'] || {})[platform.locale];
-		if (language === platform.locale || !bundledTranslations || !bundledTranslations['languageName']) {
+		const minimalTranslations = minimalTransations[platform.locale];
+		if (language === platform.locale || !minimalTranslations || !minimalTranslations['languageName']) {
 			return;
 		}
 
 		// The initial value for below dont get used. We just have it here so that they get localized.
 		// The localized strings get pulled into the "product.json" file during endgame to get shipped
-		let searchForLanguagePacks = localize('searchForLanguagePacks', "There are extensions in the Marketplace that can localize VS Code using the ${0} language.", bundledTranslations['languageName']);
+		let searchForLanguagePacks = localize('searchForLanguagePacks', "There are extensions in the Marketplace that can localize VS Code using the ${0} language.", minimalTranslations['languageName']);
 		let searchMarketplace = localize('searchMarketplace', "Search Marketplace");
 		let dontShowAgain = localize('neverAgain', "Don't Show Again");
 
-		searchForLanguagePacks = bundledTranslations['searchForLanguagePacks'];
-		searchMarketplace = bundledTranslations['searchMarketplace'];
-		dontShowAgain = bundledTranslations['neverAgain'];
+		searchForLanguagePacks = minimalTranslations['searchForLanguagePacks'];
+		searchMarketplace = minimalTranslations['searchMarketplace'];
+		dontShowAgain = minimalTranslations['neverAgain'];
 
 		const dontShowSearchLanguagePacksAgainKey = 'language.install.donotask';
 		let dontShowSearchForLanguages = JSON.parse(this.storageService.get(dontShowSearchLanguagePacksAgainKey, StorageScope.GLOBAL, '[]'));
