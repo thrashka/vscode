@@ -16,7 +16,7 @@ import { ILocalizationsService, LanguageType } from 'vs/platform/localizations/c
 import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
 import * as platform from 'vs/base/common/platform';
 import { IExtensionManagementService, DidInstallExtensionEvent, LocalExtensionType, IExtensionGalleryService, IGalleryExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
-import { INotificationService } from 'vs/platform/notification/common/notification';
+import { INotificationService, IPromptChoice } from 'vs/platform/notification/common/notification';
 import Severity from 'vs/base/common/severity';
 import { IJSONEditingService } from 'vs/workbench/services/configuration/common/jsonEditing';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
@@ -125,10 +125,12 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 		let searchForLanguagePacks = localize('searchForLanguagePacks', "There are extensions in the Marketplace that can localize VS Code using the ${0} language.", minimalTranslations['languageName']);
 		let searchMarketplace = localize('searchMarketplace', "Search Marketplace");
 		let dontShowAgain = localize('neverAgain', "Don't Show Again");
+		let install = localize('install', "Install");
 
 		searchForLanguagePacks = minimalTranslations['searchForLanguagePacks'];
 		searchMarketplace = minimalTranslations['searchMarketplace'];
 		dontShowAgain = minimalTranslations['neverAgain'];
+		install = minimalTransations['install'];
 
 		const dontShowSearchLanguagePacksAgainKey = 'language.install.donotask';
 		let dontShowSearchForLanguages = JSON.parse(this.storageService.get(dontShowSearchLanguagePacksAgainKey, StorageScope.GLOBAL, '[]'));
@@ -139,30 +141,46 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 		if (dontShowSearchForLanguages.indexOf(platform.locale) > -1
 			|| !searchForLanguagePacks
 			|| !searchMarketplace
-			|| !dontShowAgain) {
+			|| !dontShowAgain
+			|| !install) {
 			return;
 		}
 
-		this.notificationService.prompt(Severity.Info, searchForLanguagePacks,
-			[
-				{
-					label: searchMarketplace, run: () => {
-						this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
-							.then(viewlet => viewlet as IExtensionsViewlet)
-							.then(viewlet => {
-								viewlet.search(`tag:lp-${platform.locale}`);
-								viewlet.focus();
-							});
-					}
-				},
-				{
-					label: dontShowAgain, run: () => {
-						dontShowSearchForLanguages.push(language);
-						this.storageService.store(dontShowSearchLanguagePacksAgainKey, StorageScope.GLOBAL, dontShowSearchForLanguages);
-					}
-				}
-			]);
+		const ceintlExtensionSearch = this.galleryService.query({ names: [`MS-CEINTL.vscode-language-pack-${platform.locale}`], pageSize: 1 });
+		const tagSearch = this.galleryService.query({ text: `tag:lp-${platform.locale}`, pageSize: 1 });
 
+		TPromise.join([ceintlExtensionSearch, tagSearch]).then(([ceintlResult, tagResult]) => {
+			if (ceintlResult.total === 0 && tagResult.total === 0) {
+				return;
+			}
+
+			const extensionToInstall = ceintlResult.total === 1 ? ceintlResult.firstPage[0] : null;
+			const searchAction: IPromptChoice = {
+				label: searchMarketplace, run: () => {
+					this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
+						.then(viewlet => viewlet as IExtensionsViewlet)
+						.then(viewlet => {
+							viewlet.search(`tag:lp-${platform.locale}`);
+							viewlet.focus();
+						});
+				}
+			};
+			const installAction: IPromptChoice = {
+				label: install, run: () => this.installExtension(extensionToInstall)
+			};
+
+
+			this.notificationService.prompt(Severity.Info, searchForLanguagePacks,
+				[
+					extensionToInstall ? installAction : searchAction,
+					{
+						label: dontShowAgain, run: () => {
+							dontShowSearchForLanguages.push(language);
+							this.storageService.store(dontShowSearchLanguagePacksAgainKey, StorageScope.GLOBAL, dontShowSearchForLanguages);
+						}
+					}
+				]);
+		});
 	}
 
 	private getLanguagePackExtension(language: string): TPromise<IGalleryExtension> {
