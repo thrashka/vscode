@@ -27,7 +27,6 @@ import { IStorageService, StorageScope, } from 'vs/platform/storage/common/stora
 import { TPromise } from 'vs/base/common/winjs.base';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { VIEWLET_ID as EXTENSIONS_VIEWLET_ID, IExtensionsViewlet } from 'vs/workbench/parts/extensions/common/extensions';
-import product from 'vs/platform/node/product';
 import minimalTransations from 'vs/platform/node/minimalTranslations';
 
 // Register action to configure locale and related settings
