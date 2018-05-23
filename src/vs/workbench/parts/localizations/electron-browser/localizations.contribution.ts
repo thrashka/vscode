@@ -27,6 +27,7 @@ import { IStorageService, StorageScope, } from 'vs/platform/storage/common/stora
 import { TPromise } from 'vs/base/common/winjs.base';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { VIEWLET_ID as EXTENSIONS_VIEWLET_ID, IExtensionsViewlet } from 'vs/workbench/parts/extensions/common/extensions';
+import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import minimalTransations from 'vs/platform/node/minimalTranslations';
 
 // Register action to configure locale and related settings
@@ -43,7 +44,8 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 		@IStorageService private storageService: IStorageService,
 		@IExtensionManagementService private extensionManagementService: IExtensionManagementService,
 		@IExtensionGalleryService private galleryService: IExtensionGalleryService,
-		@IViewletService private viewletService: IViewletService
+		@IViewletService private viewletService: IViewletService,
+		@ITelemetryService private telemetryService: ITelemetryService
 	) {
 		super();
 		this.updateLocaleDefintionSchema();
@@ -115,21 +117,21 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 			return;
 		}
 
-		const minimalTranslations = minimalTransations[platform.locale];
-		if (language === platform.locale || !minimalTranslations || !minimalTranslations['languageName']) {
+		const currentTranslations = minimalTransations[platform.locale];
+		if (language === platform.locale || !currentTranslations || !currentTranslations['languageName']) {
 			return;
 		}
 
 		// The initial value for below dont get used. We just have it here so that they get localized.
 		// The localized strings get pulled into the "product.json" file during endgame to get shipped
-		let searchForLanguagePacks = localize('searchForLanguagePacks', "There are extensions in the Marketplace that can localize VS Code using the ${0} language.", minimalTranslations['languageName']);
+		let showLanguagePackExtensions = localize('showLanguagePackExtensions', "The Marketplace has extensions that can localize VS Code using the ${0} language.", currentTranslations['languageName']);
 		let searchMarketplace = localize('searchMarketplace', "Search Marketplace");
-		let dontShowAgain = localize('neverAgain', "Don't Show Again");
+		let dontShowAgain = localize('neverShowAgain', "Don't Show Again");
 		let install = localize('install', "Install");
 
-		searchForLanguagePacks = minimalTranslations['searchForLanguagePacks'];
-		searchMarketplace = minimalTranslations['searchMarketplace'];
-		dontShowAgain = minimalTranslations['neverAgain'];
+		showLanguagePackExtensions = currentTranslations['showLanguagePackExtensions'];
+		searchMarketplace = currentTranslations['searchMarketplace'];
+		dontShowAgain = currentTranslations['neverShowAgain'];
 		install = minimalTransations['install'];
 
 		const dontShowSearchLanguagePacksAgainKey = 'language.install.donotask';
@@ -139,7 +141,7 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 		}
 
 		if (dontShowSearchForLanguages.indexOf(platform.locale) > -1
-			|| !searchForLanguagePacks
+			|| !showLanguagePackExtensions
 			|| !searchMarketplace
 			|| !dontShowAgain
 			|| !install) {
@@ -155,31 +157,47 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 			}
 
 			const extensionToInstall = ceintlResult.total === 1 ? ceintlResult.firstPage[0] : null;
-			const searchAction: IPromptChoice = {
-				label: searchMarketplace, run: () => {
-					this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
-						.then(viewlet => viewlet as IExtensionsViewlet)
-						.then(viewlet => {
-							viewlet.search(`tag:lp-${platform.locale}`);
-							viewlet.focus();
-						});
-				}
-			};
-			const installAction: IPromptChoice = {
-				label: install, run: () => this.installExtension(extensionToInstall)
+			const logUserReaction = (userReaction: string) => {
+				/* __GDPR__
+					"languagePackSuggestion:popup" : {
+						"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+						"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+						"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+					}
+				*/
+				this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction, language, promptType: extensionToInstall ? install : searchMarketplace });
 			};
 
-
-			this.notificationService.prompt(Severity.Info, searchForLanguagePacks,
+			this.notificationService.prompt(Severity.Info, showLanguagePackExtensions,
 				[
-					extensionToInstall ? installAction : searchAction,
+					{
+						label: extensionToInstall ? install : searchMarketplace,
+						run: () => {
+							logUserReaction('ok');
+							if (extensionToInstall) {
+								this.installExtension(extensionToInstall);
+							} else {
+								this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
+									.then(viewlet => viewlet as IExtensionsViewlet)
+									.then(viewlet => {
+										viewlet.search(`tag:lp-${platform.locale}`);
+										viewlet.focus();
+									});
+							}
+
+						}
+					},
 					{
 						label: dontShowAgain, run: () => {
+							logUserReaction('neverShowAgain');
 							dontShowSearchForLanguages.push(language);
 							this.storageService.store(dontShowSearchLanguagePacksAgainKey, StorageScope.GLOBAL, dontShowSearchForLanguages);
 						}
 					}
-				]);
+				],
+				() => {
+					logUserReaction('cancelled');
+				});
 		});
 	}
 
