@@ -16,7 +16,7 @@ import { ILocalizationsService, LanguageType } from 'vs/platform/localizations/c
 import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
 import * as platform from 'vs/base/common/platform';
 import { IExtensionManagementService, DidInstallExtensionEvent, LocalExtensionType, IExtensionGalleryService, IGalleryExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
-import { INotificationService, IPromptChoice } from 'vs/platform/notification/common/notification';
+import { INotificationService } from 'vs/platform/notification/common/notification';
 import Severity from 'vs/base/common/severity';
 import { IJSONEditingService } from 'vs/workbench/services/configuration/common/jsonEditing';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
@@ -117,22 +117,22 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 			return;
 		}
 
-		const currentTranslations = minimalTransations[platform.locale];
-		if (language === platform.locale || !currentTranslations || !currentTranslations['languageName']) {
+		const bundledTranslations = minimalTransations[platform.locale];
+		if (language === platform.locale || !bundledTranslations || !bundledTranslations['languageName']) {
 			return;
 		}
 
 		// The initial value for below dont get used. We just have it here so that they get localized.
 		// The localized strings get pulled into the "product.json" file during endgame to get shipped
-		let showLanguagePackExtensions = localize('showLanguagePackExtensions', "The Marketplace has extensions that can localize VS Code using the ${0} language.", currentTranslations['languageName']);
+		let searchForLanguagePacks = localize('searchForLanguagePacks', "The Marketplace has extensions that can localize VS Code using the ${0} language.", bundledTranslations['languageName']);
 		let searchMarketplace = localize('searchMarketplace', "Search Marketplace");
 		let dontShowAgain = localize('neverShowAgain', "Don't Show Again");
 		let install = localize('install', "Install");
 
-		showLanguagePackExtensions = currentTranslations['showLanguagePackExtensions'];
-		searchMarketplace = currentTranslations['searchMarketplace'];
-		dontShowAgain = currentTranslations['neverShowAgain'];
-		install = minimalTransations['install'];
+		searchForLanguagePacks = bundledTranslations['searchForLanguagePacks'];
+		searchMarketplace = bundledTranslations['searchMarketplace'];
+		dontShowAgain = bundledTranslations['neverShowAgain'];
+		install = bundledTranslations['install'];
 
 		const dontShowSearchLanguagePacksAgainKey = 'language.install.donotask';
 		let dontShowSearchForLanguages = JSON.parse(this.storageService.get(dontShowSearchLanguagePacksAgainKey, StorageScope.GLOBAL, '[]'));
@@ -141,7 +141,7 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 		}
 
 		if (dontShowSearchForLanguages.indexOf(platform.locale) > -1
-			|| !showLanguagePackExtensions
+			|| !searchForLanguagePacks
 			|| !searchMarketplace
 			|| !dontShowAgain
 			|| !install) {
@@ -168,7 +168,7 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 				this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction, language, promptType: extensionToInstall ? install : searchMarketplace });
 			};
 
-			this.notificationService.prompt(Severity.Info, showLanguagePackExtensions,
+			this.notificationService.prompt(Severity.Info, searchForLanguagePacks,
 				[
 					{
 						label: extensionToInstall ? install : searchMarketplace,
